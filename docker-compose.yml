@@ -1,0 +1,168 @@
+services:
+  product-service:
+    image: purrfectlypawsh24/product-service:latest
+    ports:
+      - "8081:8080"
+    depends_on:
+      - product-db
+    volumes:
+      - ./:/app/app
+    links:
+      - product-db 
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://product-db:5432/postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq-container
+      - SPRING_RABBITMQ_PORT=5672
+    networks:
+        - product-nw
+        - service-nw
+  product-db:
+    image: postgres:13
+    ports:
+      - ":5432"
+    volumes:
+      - ./:/app/
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - product-nw
+
+  gateway:
+    image: purrfectlypawsh24/api-gateway:latest
+    ports: 
+      - "8080:8080"
+    networks:
+      - service-nw
+    depends_on:
+      - keycloak
+  
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.7
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./keycloak-config/:/opt/keycloak/data/import:ro
+    entrypoint: '/opt/keycloak/bin/kc.sh start-dev --import-realm'
+    networks:
+      - service-nw
+
+  basket-db:
+    image: postgres:13
+    volumes:
+      - ./:/app/
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - basket-nw
+
+  rabbitmq-container:
+    image: rabbitmq:3.11-management
+    hostname: rabbitmq-container
+    ports:
+     - "15672:15672"
+     - "5672:5672"
+    networks:
+      - service-nw
+
+  basket-service:
+    image: purrfectlypawsh24/basket-service:latest
+    ports:
+      - "8082:8080"
+    depends_on:
+      - basket-db
+      - rabbitmq-container
+    volumes:
+      - ./:/app/app
+    links:
+      - basket-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://basket-db:5432/postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq-container
+      - SPRING_RABBITMQ_PORT=5672
+    networks:
+      - basket-nw
+      - service-nw
+
+  checkout-service:
+    command: java -jar target/checkout-service-0.0.1-SNAPSHOT.jar
+    build:
+      context: ../checkout-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./:/app/app
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq-container
+      - SPRING_RABBITMQ_PORT=5672
+    networks:
+      - service-nw
+
+  stripe-cli:
+    image: stripe/stripe-cli
+    command: ["listen", "--api-key", "sk_test_51PSaJ3AkT1tP4rUO0vg95XKZ4cDfwhkBE2QiXZAPjZqWMlkJF3zxjVfURa6Q6qnG5BLwpCwnzncTSlZAMuT0Xl5700f02Tnbrt", "--forward-to", "checkout-service:8080/v1/checkout/webhook"]
+    networks:
+      - service-nw
+    ports:
+      - "12111:12111"
+  
+  order-db:
+    image: postgres:13
+    volumes:
+      - ./:/app/
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - order-nw
+
+  order-service:
+    command: java -jar target/OrderMicroService-0.0.1-SNAPSHOT.jar
+    build:
+      context: ../order-service
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8080"
+    depends_on:
+      - order-db
+    volumes:
+      - ./:/app/app
+    links:
+      - order-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://order-db:5432/postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq-container
+      - SPRING_RABBITMQ_PORT=5672
+    networks:
+      - order-nw
+      - service-nw
+
+  frontend:
+    build: 
+      context: ../webshop-frontend
+    networks:
+      - service-nw
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+
+networks:
+  order-nw:
+    name: order-nw
+  product-nw:
+    name: product-nw
+  basket-nw:
+    name: basket-nw
+  service-nw:
+    name: service-nw
