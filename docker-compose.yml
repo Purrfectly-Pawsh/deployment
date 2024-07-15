@@ -1,5 +1,6 @@
 services:
   product-service:
+    container_name: product-service
     image: purrfectlypawsh24/product-service:latest
     ports:
       - "8081:8080"
@@ -30,6 +31,7 @@ services:
       - product-nw
 
   gateway:
+    container_name: gateway
     image: purrfectlypawsh24/api-gateway:latest
     ports: 
       - "8080:8080"
@@ -39,6 +41,7 @@ services:
       - keycloak
   
   keycloak:
+    container_name: keycloak
     image: quay.io/keycloak/keycloak:23.0.7
     environment:
       KEYCLOAK_ADMIN: admin
@@ -72,6 +75,7 @@ services:
       - service-nw
 
   basket-service:
+    container_name: basket-service
     image: purrfectlypawsh24/basket-service:latest
     ports:
       - "8082:8080"
@@ -91,6 +95,7 @@ services:
       - service-nw
 
   checkout-service:
+    container_name: checkout-service
     command: java -jar target/checkout-service-0.0.1-SNAPSHOT.jar
     build:
       context: ../checkout-service
@@ -125,6 +130,7 @@ services:
       - order-nw
 
   order-service:
+    container_name: order-service
     command: java -jar target/OrderMicroService-0.0.1-SNAPSHOT.jar
     build:
       context: ../order-service
@@ -146,8 +152,10 @@ services:
       - service-nw
 
   frontend:
-    build: 
-      context: ../webshop-frontend
+    image: purrfectlypawsh24/frontend:latest
+    environment:
+      - VITE_API_GATEWAY_SERVICE_BASE_URL=http://gateway:8080
+      - VITE_KEYCLOAK_SERVER_URL=http://keycloak:8080
     networks:
       - service-nw
     ports:
